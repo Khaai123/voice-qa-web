@@ -198,58 +198,112 @@
   </script>
 
 </body>
+<style>
+  #gpt-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.5);
+    z-index: 9998;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #gpt-popup {
+    background: white;
+    width: 600px;
+    max-width: 90%;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    font-family: Arial, sans-serif;
+    z-index: 9999;
+  }
+
+  #gpt-popup h2 {
+    margin-top: 0;
+    font-size: 18px;
+  }
+
+  #gpt-popup textarea {
+    width: 100%;
+    height: 120px;
+    margin-top: 10px;
+    padding: 8px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    resize: vertical;
+  }
+
+  #gpt-popup button {
+    margin-top: 15px;
+    padding: 10px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  #gpt-send {
+    background-color: #10a37f;
+    color: white;
+    margin-right: 10px;
+  }
+
+  #gpt-close {
+    background-color: #ccc;
+    color: black;
+  }
+</style>
+
 <script>
 document.addEventListener("mouseup", function () {
   const selectedText = window.getSelection().toString().trim();
   if (selectedText.length > 0) {
-    showChatPopup(selectedText);
+    showOverlayWithGPTPrompt(selectedText);
   }
 });
 
-function showChatPopup(selectedText) {
-  const existingPopup = document.getElementById("chat-popup");
-  if (existingPopup) existingPopup.remove();
+function showOverlayWithGPTPrompt(selectedText) {
+  const prompt = "Chỉnh giúp tôi đoạn văn sau, chỉnh sửa từng câu một chỉ ra điểm sai và sửa thế nào là hợp lý, và viết thêm những câu đồng nghĩa phù hợp với văn nói và văn viết.";
 
+  // Remove old popup if exists
+  const oldOverlay = document.getElementById("gpt-overlay");
+  if (oldOverlay) oldOverlay.remove();
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.id = "gpt-overlay";
+
+  // Create popup
   const popup = document.createElement("div");
-  popup.id = "chat-popup";
-  popup.style.position = "fixed";
-  popup.style.bottom = "20px";
-  popup.style.right = "20px";
-  popup.style.width = "400px";
-  popup.style.height = "300px";
-  popup.style.background = "#fff";
-  popup.style.border = "1px solid #ccc";
-  popup.style.borderRadius = "10px";
-  popup.style.boxShadow = "0 0 10px rgba(0,0,0,0.2)";
-  popup.style.padding = "10px";
-  popup.style.zIndex = "10000";
-  popup.style.display = "flex";
-  popup.style.flexDirection = "column";
+  popup.id = "gpt-popup";
+  popup.innerHTML = `
+    <h2>Yêu cầu ChatGPT chỉnh sửa đoạn văn</h2>
+    <div><strong>Prompt:</strong></div>
+    <div style="background:#f4f4f4;padding:10px;border-radius:6px;margin-bottom:10px;font-size:14px;">${prompt}</div>
+    <div><strong>Đoạn văn bạn chọn:</strong></div>
+    <textarea>${selectedText}</textarea>
+    <div style="margin-top:10px;">
+      <button id="gpt-send">🚀 Mở ChatGPT với đoạn văn này</button>
+      <button id="gpt-close">Đóng</button>
+    </div>
+  `;
 
-  const textarea = document.createElement("textarea");
-  textarea.style.flex = "1";
-  textarea.style.width = "100%";
-  textarea.value = `Chỉnh giúp tôi đoạn văn sau, chỉnh sửa từng câu một chỉ ra điểm sai và sửa thế nào là hợp lý, và viết thêm những câu đồng nghĩa phù hợp với văn nói và văn viết:\n\n${selectedText}`;
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
 
-  const btn = document.createElement("button");
-  btn.textContent = "Gửi đến ChatGPT";
-  btn.style.marginTop = "10px";
-  btn.onclick = () => {
-    const query = encodeURIComponent(textarea.value);
-    const url = `https://chat.openai.com/chat?message=${query}`;
-    window.open(url, '_blank');
+  // Button handlers
+  document.getElementById("gpt-close").onclick = () => overlay.remove();
+
+  document.getElementById("gpt-send").onclick = () => {
+    const textArea = popup.querySelector("textarea");
+    const message = `${prompt}\n\n${textArea.value}`;
+    const chatURL = `https://chat.openai.com/?prompt=${encodeURIComponent(message)}`;
+    window.open(chatURL, "_blank");
   };
-
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "Đóng";
-  closeBtn.style.marginTop = "5px";
-  closeBtn.onclick = () => popup.remove();
-
-  popup.appendChild(textarea);
-  popup.appendChild(btn);
-  popup.appendChild(closeBtn);
-
-  document.body.appendChild(popup);
 }
 </script>
 </html>
