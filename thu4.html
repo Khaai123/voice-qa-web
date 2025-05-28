@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Q&A Recorder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      background-color: #f4f4f4;
+    }
+    .question-block {
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .question-text {
+      font-size: 1.1em;
+      margin-bottom: 10px;
+      padding: 6px;
+      border: 1px dashed transparent;
+    }
+    .question-text[contenteditable="true"]:focus {
+      border: 1px dashed #888;
+      background-color: #f0f8ff;
+      outline: none;
+    }
+    button {
+      padding: 8px 16px;
+      margin: 5px 5px 5px 0;
+      cursor: pointer;
+    }
+    .answer {
+      margin-top: 10px;
+      padding: 10px;
+      background: #e9ecef;
+      border-radius: 5px;
+      min-height: 30px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Q&A Voice Recorder (English)</h1>
+
+  <div id="questions-container">
+    <!-- Initial Questions -->
+    <div class="question-block" data-index="0">
+      <div class="question-text" contenteditable="true">1. What is your name?</div>
+      <button onclick="speakQuestion(0)">🔈 Read</button>
+      <button onclick="startRecognition(0)">🎤 Start Recording</button>
+      <button onclick="stopRecognition()">🛑 Stop</button>
+      <button onclick="playAudio(0)">▶️ Play</button>
+      <div class="answer" id="answer-0">Your answer will appear here...</div>
+      <audio id="audio-0" controls style="display: none;"></audio>
+    </div>
+
+    <div class="question-block" data-index="1">
+      <div class="question-text" contenteditable="true">2. What did you do yesterday?</div>
+      <button onclick="speakQuestion(1)">🔈 Read</button>
+      <button onclick="startRecognition(1)">🎤 Start Recording</button>
+      <button onclick="stopRecognition()">🛑 Stop</button>
+      <button onclick="playAudio(1)">▶️ Play</button>
+      <div class="answer" id="answer-1">Your answer will appear here...</div>
+      <audio id="audio-1" controls style="display: none;"></audio>
+    </div>
+  </div>
+
+  <button onclick="addNewQuestion()">➕ Thêm câu hỏi mới</button>
+
+  <script>
+    let recognition;
+    let currentAnswerIndex = null;
+    let questionCount = 2; // Bắt đầu từ câu thứ 2
+
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Speech recognition not supported in this browser.');
+    } else {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = function(event) {
+  let transcript = '';
+  for (let i = event.resultIndex; i < event.results.length; ++i) {
+    if (event.results[i].isFinal) {
+      transcript += event.results[i][0].transcript;
+    }
+  }
+  if (currentAnswerIndex !== null && transcript) {
+    const answerBox = document.getElementById(`answer-${currentAnswerIndex}`);
+    answerBox.textContent = transcript; // <-- thay vì +=
+  }
+};
+      recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+      };
+    }
+
+    function startRecognition(index) {
+      currentAnswerIndex = index;
+      if (recognition) recognition.start();
+      startAudioRecording(index);
+    }
+
+    function stopRecognition() {
+      if (recognition) recognition.stop();
+      stopAudioRecording();
+    }
+
+    // === Audio Recording ===
+    let mediaRecorder;
+    let audioChunks = [];
+    let currentAudioIndex = null;
+
+    async function startAudioRecording(index) {
+      currentAudioIndex = index;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const audioURL = URL.createObjectURL(blob);
+        const audioElement = document.getElementById(`audio-${currentAudioIndex}`);
+        audioElement.src = audioURL;
+        audioElement.style.display = 'block';
+      };
+
+      mediaRecorder.start();
+    }
+
+    function stopAudioRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    }
+
+    function playAudio(index) {
+      const audio = document.getElementById(`audio-${index}`);
+      audio.play();
+    }
+
+    // === Text-to-Speech (giọng nữ nếu có) ===
+    let femaleVoice = null;
+
+    function loadVoices() {
+      const voices = speechSynthesis.getVoices();
+      femaleVoice = voices.find(v =>
+        v.lang.startsWith("en") && (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("woman") || v.name.toLowerCase().includes("samantha"))
+      );
+      if (!femaleVoice && voices.length > 0) {
+        femaleVoice = voices.find(v => v.lang.startsWith("en"));
+      }
+    }
+
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    function speakQuestion(index) {
+      const text = document.querySelector(`.question-block[data-index="${index}"] .question-text`).textContent;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = femaleVoice;
+      utterance.lang = 'en-US';
+      speechSynthesis.speak(utterance);
+    }
+
+    // === Thêm câu hỏi mới ===
+    function addNewQuestion() {
+      const container = document.getElementById('questions-container');
+
+      const index = questionCount;
+      const questionDiv = document.createElement('div');
+      questionDiv.className = 'question-block';
+      questionDiv.setAttribute('data-index', index);
+
+      questionDiv.innerHTML = `
+        <div class="question-text" contenteditable="true">${index + 1}. New question...</div>
+        <button onclick="speakQuestion(${index})">🔈 Read</button>
+        <button onclick="startRecognition(${index})">🎤 Start Recording</button>
+        <button onclick="stopRecognition()">🛑 Stop</button>
+        <button onclick="playAudio(${index})">▶️ Play</button>
+        <div class="answer" id="answer-${index}">Your answer will appear here...</div>
+        <audio id="audio-${index}" controls style="display: none;"></audio>
+      `;
+
+      container.appendChild(questionDiv);
+      questionCount++;
+    }
+
+    window.onload = loadVoices;
+  </script>
+
+</body>
+</html>
