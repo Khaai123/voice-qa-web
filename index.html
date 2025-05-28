@@ -198,4 +198,58 @@
   </script>
 
 </body>
+<script>
+document.addEventListener("mouseup", function () {
+  const selectedText = window.getSelection().toString().trim();
+  if (selectedText.length > 0) {
+    showChatPopup(selectedText);
+  }
+});
+
+function showChatPopup(selectedText) {
+  const existingPopup = document.getElementById("chat-popup");
+  if (existingPopup) existingPopup.remove();
+
+  const popup = document.createElement("div");
+  popup.id = "chat-popup";
+  popup.style.position = "fixed";
+  popup.style.bottom = "20px";
+  popup.style.right = "20px";
+  popup.style.width = "400px";
+  popup.style.height = "300px";
+  popup.style.background = "#fff";
+  popup.style.border = "1px solid #ccc";
+  popup.style.borderRadius = "10px";
+  popup.style.boxShadow = "0 0 10px rgba(0,0,0,0.2)";
+  popup.style.padding = "10px";
+  popup.style.zIndex = "10000";
+  popup.style.display = "flex";
+  popup.style.flexDirection = "column";
+
+  const textarea = document.createElement("textarea");
+  textarea.style.flex = "1";
+  textarea.style.width = "100%";
+  textarea.value = `Chỉnh giúp tôi đoạn văn sau, chỉnh sửa từng câu một chỉ ra điểm sai và sửa thế nào là hợp lý, và viết thêm những câu đồng nghĩa phù hợp với văn nói và văn viết:\n\n${selectedText}`;
+
+  const btn = document.createElement("button");
+  btn.textContent = "Gửi đến ChatGPT";
+  btn.style.marginTop = "10px";
+  btn.onclick = () => {
+    const query = encodeURIComponent(textarea.value);
+    const url = `https://chat.openai.com/chat?message=${query}`;
+    window.open(url, '_blank');
+  };
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Đóng";
+  closeBtn.style.marginTop = "5px";
+  closeBtn.onclick = () => popup.remove();
+
+  popup.appendChild(textarea);
+  popup.appendChild(btn);
+  popup.appendChild(closeBtn);
+
+  document.body.appendChild(popup);
+}
+</script>
 </html>
