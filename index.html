@@ -1,211 +1,431 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Voice Q&A Recorder</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 30px;
-      background-color: #f4f4f4;
+<meta charset="utf-8"/>
+<title>Transcript (ZH + VI)</title>
+<style>
+    body { font-family: Arial, sans-serif; }
+    #player { margin-bottom: 15px; }
+    #transcript { max-width: 800px; margin: 0 auto; }
+    .line { padding: 8px; border-bottom: 1px solid #ccc; cursor: pointer; position: relative; }
+    .line:hover { background-color: #eef; }
+    .user { font-weight: bold; }
+    .machine { color: gray; margin-left: 10px; }
+    .line[contenteditable="true"] {
+      background-color: #ffffcc;
+      outline: 1px dashed #999;
     }
-    .question-block {
-      background: #fff;
-      padding: 20px;
-      margin-bottom: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    .highlight {
+      background-color: #d1ecf1 !important;
     }
-    .question-text {
-      font-size: 1.1em;
-      margin-bottom: 10px;
-      padding: 6px;
-      border: 1px dashed transparent;
-    }
-    .question-text[contenteditable="true"]:focus {
-      border: 1px dashed #888;
-      background-color: #f0f8ff;
-      outline: none;
-    }
-    button {
-      padding: 8px 16px;
-      margin: 5px 5px 5px 0;
+    .record-btn {
+      position: absolute;
+      right: 10px;
+      top: 8px;
+      background: #2196f3;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
       cursor: pointer;
+      font-size: 12px;
     }
-    .answer {
-      margin-top: 10px;
-      padding: 10px;
-      background: #e9ecef;
-      border-radius: 5px;
-      min-height: 30px;
+    .result {
+      margin-top: 5px;
+      font-size: 13px;
     }
-  </style>
+    #toolbar {
+      display: none;
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      z-index: 1000;
+    }
+</style>
+<script src="https://www.youtube.com/iframe_api">
+function saveScripts() {
+  const videoId = document.getElementById('videoIdInput').value.trim();
+
+  const lines = document.querySelectorAll('.line');
+  const enChunks = [];
+  const viChunks = [];
+
+  for (const line of lines) {
+    const time = parseInt(line.dataset.time || '0');
+    const minutes = Math.floor(time / 60);
+    const seconds = (time % 60).toString().padStart(2, '0');
+    const content = line.innerHTML
+      .replace(/<button[^>]*>.*?<\/button>/g, '') // remove buttons
+      .replace(/<div class="result">.*?<\/div>/g, '') // remove result boxes
+      .replace(/<[^>]+>/g, '') // remove all tags
+      .trim();
+
+    const entry = `${minutes}:${seconds}\n${content}`;
+
+    if (line.classList.contains('user')) {
+      enChunks.push(entry);
+    } else if (line.classList.contains('machine')) {
+      viChunks.push(entry);
+    }
+  }
+
+  const blob = new Blob([JSON.stringify({
+    videoId,
+    zhText: enChunks.join('\n'),
+    viText: viChunks.join('\n')
+  }, null, 2)], { type: 'application/json' });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transcript_${videoId || 'video'}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+function loadScriptFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      document.getElementById('videoIdInput').value = data.videoId || '';
+      document.getElementById('scriptEN').value = data.enText || '';
+      document.getElementById('scriptVI').value = data.viText || '';
+    } catch (err) {
+      alert('Invalid JSON file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+</script>
 </head>
 <body>
+<div style="margin: 20px auto; max-width: 800px;">
+<label>🔗 YouTube Video ID: <input id="videoIdInput" style="width: 300px;" type="text" value=""/></label><br/><br/>
+<label>📝 Chinese Transcript: <textarea id="scriptZH" rows="6" style="width: 100%;"></textarea></label><br/><br/>
+<label>🇻🇳 Vietnamese Transcript: <textarea id="scriptVI" rows="6" style="width: 100%;"></textarea></label><br/><br/>
+<br/>
+<button onclick="loadVideoAndTranscript()">▶️ Load Video + Transcript</button><br/>
+<button onclick="saveScripts()">💾 Save Script</button>
+<br/><br/>
+<label>📂 Load Saved Script (.json): 
+  <input type="file" id="loadFileInput" accept=".json" onchange="loadScriptFile(event)">
+</label>
 
-  <h1>Q&A Voice Recorder (English)</h1>
 
-  <div id="questions-container">
-    <!-- Initial Questions -->
-    <div class="question-block" data-index="0">
-      <div class="question-text" contenteditable="true">1. What is your name?</div>
-      <button onclick="speakQuestion(0)">🔈 Read</button>
-      <button onclick="startRecognition(0)">🎤 Start Recording</button>
-      <button onclick="stopRecognition()">🛑 Stop</button>
-      <button onclick="playAudio(0)">▶️ Play</button>
-      <div class="answer" id="answer-0">Your answer will appear here...</div>
-      <audio id="audio-0" controls style="display: none;"></audio>
-    </div>
+</div>
+<div id="player"></div>
+<h3>Transcript (ZH + VI)</h3>
+<div id="toolbar">
+<button onclick="execCmd('bold')"><b>B</b></button>
+<button onclick="execCmd('italic')"><i>I</i></button>
+<button onclick="execCmd('underline')"><u>U</u></button>
+<input onchange="execCmd('foreColor', this.value)" type="color"/>
+</div>
+<div id="transcript"></div>
+<button id="togglePause" style="
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999;
+  padding: 10px 15px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;">Pause</button>
 
-    <div class="question-block" data-index="1">
-      <div class="question-text" contenteditable="true">2. What did you do yesterday?</div>
-      <button onclick="speakQuestion(1)">🔈 Read</button>
-      <button onclick="startRecognition(1)">🎤 Start Recording</button>
-      <button onclick="stopRecognition()">🛑 Stop</button>
-      <button onclick="playAudio(1)">▶️ Play</button>
-      <div class="answer" id="answer-1">Your answer will appear here...</div>
-      <audio id="audio-1" controls style="display: none;"></audio>
-    </div>
-  </div>
-
-  <button onclick="addNewQuestion()">➕ Thêm câu hỏi mới</button>
-
-  <script>
-    let recognition;
-    let currentAnswerIndex = null;
-    let questionCount = 2; // Bắt đầu từ câu thứ 2
-
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('Speech recognition not supported in this browser.');
-    } else {
-      recognition = new webkitSpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = function(event) {
-  let transcript = '';
-  for (let i = event.resultIndex; i < event.results.length; ++i) {
-    if (event.results[i].isFinal) {
-      transcript += event.results[i][0].transcript;
-    }
-  }
-  if (currentAnswerIndex !== null && transcript) {
-    const answerBox = document.getElementById(`answer-${currentAnswerIndex}`);
-    answerBox.textContent = transcript; // <-- thay vì +=
-  }
-};
-      recognition.onerror = function(event) {
-        console.error('Speech recognition error:', event.error);
-      };
-    }
-
-    function startRecognition(index) {
-      currentAnswerIndex = index;
-      if (recognition) recognition.start();
-      startAudioRecording(index);
-    }
-
-    function stopRecognition() {
-      if (recognition) recognition.stop();
-      stopAudioRecording();
-    }
-
-    // === Audio Recording ===
-    let mediaRecorder;
-    let audioChunks = [];
-    let currentAudioIndex = null;
-
-    async function startAudioRecording(index) {
-      currentAudioIndex = index;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        audioChunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        const audioURL = URL.createObjectURL(blob);
-        const audioElement = document.getElementById(`audio-${currentAudioIndex}`);
-        audioElement.src = audioURL;
-        audioElement.style.display = 'block';
-      };
-
-      mediaRecorder.start();
-    }
-
-    function stopAudioRecording() {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
-    }
-
-    function playAudio(index) {
-      const audio = document.getElementById(`audio-${index}`);
-      audio.play();
-    }
-
-    // === Text-to-Speech (giọng nữ nếu có) ===
-    let femaleVoice = null;
-
-    function loadVoices() {
-      const voices = speechSynthesis.getVoices();
-      femaleVoice = voices.find(v =>
-        v.lang.startsWith("en") && (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("woman") || v.name.toLowerCase().includes("samantha"))
-      );
-      if (!femaleVoice && voices.length > 0) {
-        femaleVoice = voices.find(v => v.lang.startsWith("en"));
-      }
-    }
-
-    speechSynthesis.onvoiceschanged = loadVoices;
-
-    function speakQuestion(index) {
-      const text = document.querySelector(`.question-block[data-index="${index}"] .question-text`).textContent;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.voice = femaleVoice;
-      utterance.lang = 'en-US';
-      speechSynthesis.speak(utterance);
-    }
-
-    // === Thêm câu hỏi mới ===
-    function addNewQuestion() {
-      const container = document.getElementById('questions-container');
-
-      const index = questionCount;
-      const questionDiv = document.createElement('div');
-      questionDiv.className = 'question-block';
-      questionDiv.setAttribute('data-index', index);
-
-      questionDiv.innerHTML = `
-        <div class="question-text" contenteditable="true">${index + 1}. New question...</div>
-        <button onclick="speakQuestion(${index})">🔈 Read</button>
-        <button onclick="startRecognition(${index})">🎤 Start Recording</button>
-        <button onclick="stopRecognition()">🛑 Stop</button>
-        <button onclick="playAudio(${index})">▶️ Play</button>
-        <div class="answer" id="answer-${index}">Your answer will appear here...</div>
-        <audio id="audio-${index}" controls style="display: none;"></audio>
-      `;
-
-      container.appendChild(questionDiv);
-      questionCount++;
-    }
-
-    window.onload = loadVoices;
-  </script>
 <script>
-  document.addEventListener("mouseup", function () {
-    const selectedText = window.getSelection().toString().trim();
-    if (selectedText) {
-      const prompt = `Chỉnh sửa giúp tôi đoạn văn sau, chỉnh sửa từng câu một, chỉ ra điểm sai và sửa thế nào là hợp lý, viết lại câu đó đúng theo văn viết thì thế nào và văn nói như thế nào. Sau đó thì thêm 2 - 3 câu đồng nghĩa để diễn đạt ý của từng câu đó:\n\n"${selectedText}"`;
-      const url = `https://chat.openai.com/?q=${encodeURIComponent(prompt)}`;
-      window.open(url, "_blank", "width=600,height=700");
+  let player;
+  let transcriptData = [];
+
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+      height: '360', width: '640', videoId: '',
+      events: { onStateChange: onPlayerStateChange }
+    });
+    document.getElementById('togglePause').onclick = function () {
+      const state = player.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        player.pauseVideo(); this.textContent = 'Play';
+      } else {
+        player.playVideo(); this.textContent = 'Pause';
+      }
+    };
+  }
+
+  function onPlayerStateChange(event) {
+    if (event.data === YT.PlayerState.PLAYING) {
+      requestAnimationFrame(trackCurrentLine);
+    }
+  }
+
+  
+let autoScrollEnabled = true;
+let lastUserScrollTime = 0;
+
+document.getElementById('transcript').addEventListener('wheel', () => {
+  autoScrollEnabled = false;
+  lastUserScrollTime = Date.now();
+});
+
+setInterval(() => {
+  if (Date.now() - lastUserScrollTime > 5000) {
+    autoScrollEnabled = true;
+  }
+}, 1000);
+
+function trackCurrentLine() {
+    const currentTime = player.getCurrentTime();
+    let currentId = null;
+    for (let i = 0; i < transcriptData.length; i++) {
+      const line = transcriptData[i];
+      if (currentTime >= line.time && (i === transcriptData.length - 1 || currentTime < transcriptData[i + 1].time)) {
+        currentId = line.id;
+        break;
+      }
+    }
+    document.querySelectorAll('.line').forEach(el => el.classList.remove('highlight'));
+    
+if (currentId) {
+  const activeEl = document.getElementById(currentId);
+  if (activeEl) {
+    activeEl.classList.add('highlight');
+    if (autoScrollEnabled) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+}
+
+    }
+    if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+      requestAnimationFrame(trackCurrentLine);
+    }
+  }
+
+  function parseTranscript(raw) {
+    const lines = raw.trim().split('\n');
+    const parsed = [];
+    let currentTime = null, currentText = [];
+    for (const line of lines) {
+      const match = line.match(/^(\d+):(\d{2})$/);
+      if (match) {
+        if (currentTime !== null && currentText.length)
+          parsed.push({ time: currentTime, text: currentText.join('<br>') });
+        currentTime = parseInt(match[1]) * 60 + parseInt(match[2]);
+        currentText = [];
+      } else {
+        currentText.push(line.trim());
+      }
+    }
+    if (currentTime !== null && currentText.length)
+      parsed.push({ time: currentTime, text: currentText.join('<br>') });
+    return parsed;
+  }
+
+  function createLineCard(id, time, fallbackText, className) {
+    const div = document.createElement('div');
+    div.className = `line ${className}`;
+    div.dataset.time = time;
+    div.id = id;
+    div.innerHTML = fallbackText;
+    div.onclick = () => { if (player?.seekTo) player.seekTo(time, true); };
+
+    if (className === 'user') {
+      const btn = document.createElement('button');
+      btn.className = 'record-btn';
+      btn.textContent = '🎤';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        startSpeechRecognition(div, fallbackText);
+      };
+      div.appendChild(btn);
+    }
+    return div;
+  }
+
+  function loadVideoAndTranscript() {
+    const videoId = document.getElementById('videoIdInput').value.trim();
+    const rawZH = document.getElementById('scriptZH').value.trim();
+    const rawVI = document.getElementById('scriptVI').value.trim();
+
+    if (player && player.loadVideoById) {
+      player.loadVideoById(videoId);
+    } else {
+      player = new YT.Player('player', {
+        height: '360', width: '640', videoId: videoId
+      });
+    }
+
+    const zh = parseTranscript(rawZH);
+    const vi = parseTranscript(rawVI);
+    const transcript = document.getElementById('transcript');
+    transcript.innerHTML = '';
+    transcriptData = [];
+
+    for (let i = 0; i < Math.max(zh.length, vi.length); i++) {
+      if (zh[i]) {
+        const text = `[${Math.floor(zh[i].time / 60)}:${(zh[i].time % 60).toString().padStart(2, '0')}] ${zh[i].text}`;
+        const div = createLineCard('zh_' + i, zh[i].time, text, 'user');
+        transcript.appendChild(div);
+        transcriptData.push({ id: 'zh_' + i, time: zh[i].time });
+      }
+      if (vi[i]) {
+        const text = `[VI] ${vi[i].text}`;
+        const div = createLineCard('vi_' + i, vi[i].time, text, 'machine');
+        transcript.appendChild(div);
+        // Không thêm vào transcriptData để tránh ảnh hưởng scroll/highlight
+      }
+    }
+  }
+
+  document.addEventListener('dblclick', e => {
+    if (e.target.classList.contains('line')) {
+      e.target.contentEditable = true;
+      e.target.focus();
     }
   });
+
+  document.addEventListener('mouseup', e => {
+    const sel = window.getSelection();
+    if (sel.toString().length > 0) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      const toolbar = document.getElementById('toolbar');
+      toolbar.style.top = `${window.scrollY + rect.top - 40}px`; 
+      toolbar.style.left = `${window.scrollX + rect.left}px`; 
+      toolbar.style.display = 'block';
+    } else {
+      document.getElementById('toolbar').style.display = 'none';
+    }
+  });
+
+  function execCmd(cmd, value = null) {
+    document.execCommand(cmd, false, value);
+  }
+
+  function startSpeechRecognition(div, expectedText) {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Speech recognition not supported in this browser');
+      return;
+    }
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = 'zh-CN';
+
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.start();
+
+    recognition.onresult = function(event) {
+      const spokenText = event.results[0][0].transcript;
+      const score = similarity(spokenText.toLowerCase(), expectedText.replace(/\[.*?\]/g, '').toLowerCase());
+      const resultEl = document.createElement('div');
+      resultEl.className = 'result';
+      resultEl.textContent = `You said: "${spokenText}" → Similarity: ${Math.round(score * 100)}%`;
+      div.appendChild(resultEl);
+    };
+
+    recognition.onerror = function(event) {
+      alert('Error occurred in recognition: ' + event.error);
+    };
+  }
+
+  function similarity(s1, s2) {
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    const longerLength = longer.length;
+    if (longerLength === 0) return 1.0;
+    return (longerLength - editDistance(longer, shorter)) / longerLength;
+  }
+
+  function editDistance(s1, s2) {
+    s1 = s1.toLowerCase();
+    s2 = s2.toLowerCase();
+    const costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+      let lastValue = i;
+      for (let j = 0; j <= s2.length; j++) {
+        if (i === 0)
+          costs[j] = j;
+        else if (j > 0) {
+          let newValue = costs[j - 1];
+          if (s1.charAt(i - 1) !== s2.charAt(j - 1))
+            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+          costs[j - 1] = lastValue;
+          lastValue = newValue;
+        }
+      }
+      if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+  }
+
+function saveScripts() {
+  const videoId = document.getElementById('videoIdInput').value.trim();
+
+  const lines = document.querySelectorAll('.line');
+  const enChunks = [];
+  const viChunks = [];
+
+  for (const line of lines) {
+    const time = parseInt(line.dataset.time || '0');
+    const minutes = Math.floor(time / 60);
+    const seconds = (time % 60).toString().padStart(2, '0');
+    const content = line.innerHTML
+      .replace(/<button[^>]*>.*?<\/button>/g, '') // remove buttons
+      .replace(/<div class="result">.*?<\/div>/g, '') // remove result boxes
+      .replace(/<[^>]+>/g, '') // remove all tags
+      .trim();
+
+    const entry = `${minutes}:${seconds}\n${content}`;
+
+    if (line.classList.contains('user')) {
+      enChunks.push(entry);
+    } else if (line.classList.contains('machine')) {
+      viChunks.push(entry);
+    }
+  }
+
+  const blob = new Blob([JSON.stringify({
+    videoId,
+    zhText: enChunks.join('\n'),
+    viText: viChunks.join('\n')
+  }, null, 2)], { type: 'application/json' });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transcript_${videoId || 'video'}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+function loadScriptFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      document.getElementById('videoIdInput').value = data.videoId || '';
+      document.getElementById('scriptZH').value = data.zhText || '';
+      document.getElementById('scriptVI').value = data.viText || '';
+    } catch (err) {
+      alert('Invalid JSON file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
 </script>
-  
 </body>
 </html>
